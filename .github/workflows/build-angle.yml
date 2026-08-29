@@ -1,0 +1,172 @@
+name: Build ANGLE
+run-name: Build ANGLE
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/build-angle.yml'
+      - 'build-angle.py'
+      - 'tests/test-angle.cpp'
+  workflow_dispatch:
+    inputs:
+      angle_revision:
+        description: 'ANGLE git revision to build'
+        required: false
+        type: string
+        default: '107da744f62a319b3c6851694740d9ebf247d048'
+      release_suffix:
+        description: 'Build suffix for the release tag. Defaults to the run number.'
+        required: false
+        type: string
+        default: ''
+      skip_release:
+        description: 'Skip creating release'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ANGLE_REVISION: ${{ inputs.angle_revision || '107da744f62a319b3c6851694740d9ebf247d048' }}
+
+jobs:
+  build-angle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-15
+            platform: mac
+            arch: arm64
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libdrm-dev \
+            libgbm-dev \
+            libwayland-dev \
+            libwayland-egl-backend-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxrandr-dev \
+            mesa-vulkan-drivers \
+            pkg-config
+
+      - name: Build ANGLE
+        run: |
+          python3 build-angle.py ${{ matrix.platform }} \
+            -archs "${{ matrix.arch }}" \
+            -revision "$ANGLE_REVISION" \
+            -out build
+
+      - name: Validate ANGLE runtime
+        shell: bash
+        run: |
+          package_dir="build/angle-${{ matrix.platform }}-${{ matrix.arch }}"
+          test_binary="build/test-angle-${{ matrix.platform }}-${{ matrix.arch }}"
+          c++ -std=c++17 \
+            -I"$package_dir/include" \
+            tests/test-angle.cpp \
+            -L"$package_dir/lib" \
+            -lEGL -lGLESv2 \
+            -o "$test_binary"
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            icd_path=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)
+            test -n "$icd_path"
+            VK_ICD_FILENAMES="$icd_path" \
+              LD_LIBRARY_PATH="$package_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+              "$test_binary"
+          else
+            DYLD_LIBRARY_PATH="$package_dir/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
+              "$test_binary"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: angle-${{ matrix.platform }}-${{ matrix.arch }}
+          path: build/angle-${{ matrix.platform }}-${{ matrix.arch }}/
+
+  create-release:
+    needs: build-angle
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.skip_release }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts
+
+      - name: Package release
+        run: |
+          mkdir -p release
+          for dir in downloaded_artifacts/*/; do
+            name=$(basename "$dir")
+            (cd "$dir" && zip -r "../../release/${name}.zip" .)
+          done
+
+      - name: Resolve release metadata
+        id: metadata
+        shell: bash
+        run: |
+          echo "revision_short=${ANGLE_REVISION:0:12}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: angle-${{ steps.metadata.outputs.revision_short }}-${{ inputs.release_suffix || github.run_number }}
+          name: ANGLE ${{ steps.metadata.outputs.revision_short }} Build ${{ inputs.release_suffix || github.run_number }}
+          body: |
+            Automated ANGLE shared runtime builds for MystralNative WebGL 2.
+
+            **Revision:** `${{ env.ANGLE_REVISION }}`
+
+            ## Platforms
+            - Linux x64 and arm64: Vulkan backend with X11 and Wayland support
+            - macOS arm64 and x64: Metal backend
+
+            ## Package layout
+            - `include/EGL`, `include/GLES2`, `include/GLES3`, `include/KHR`
+            - `lib/libEGL.so` and `lib/libGLESv2.so` on Linux
+            - `lib/libEGL.dylib` and `lib/libGLESv2.dylib` on macOS
+            - `LICENSE.angle` and `ANGLE_REVISION`
+
+            ## Runtime requirements
+            - Linux: system Vulkan loader, Vulkan driver, and XCB runtime; Wayland runtime for Wayland presentation
+            - macOS: Metal-capable macOS host
+          files: release/*.zip
+          draft: false
+          prerelease: false

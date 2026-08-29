@@ -10,6 +10,9 @@ example/build-*
 monitor_build.py
 third_party/swc-static/target/
 
+# Python bytecode
+__pycache__/
+
 # Test binaries and outputs
 tests/test_moshi
 tests/*.wav

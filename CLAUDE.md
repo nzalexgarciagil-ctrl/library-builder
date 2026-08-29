@@ -23,6 +23,7 @@ This repository (mystralengine/library-builder) provides Python scripts and GitH
 | `build-swc.py` | Build SWC TypeScript compiler | macOS (arm64, x86_64), Linux, Windows |
 | `build-moshi.py` | Build Moshi/Mimi speech AI codec | macOS (arm64, Metal), Linux (x64), Windows (x64) |
 | `build-quiche.py` | Build quiche (QUIC + HTTP/3) for WebTransport | macOS (arm64, x86_64), Linux (x64), Windows (x64), iOS (device + sim), Android (arm64/armv7/x64) |
+| `build-angle.py` | Build ANGLE EGL/OpenGL ES shared runtimes | macOS (arm64, x86_64), Linux (x64, arm64) |
 
 ## Build Commands
 
@@ -41,6 +42,8 @@ python3 build-skia.py win                          # Windows x64 (static CRT)
 python3 build-skia.py linux                        # Linux x64
 python3 build-skia.py wasm                         # WebAssembly
 python3 build-skia.py xcframework                  # Apple XCFramework (macOS + iOS)
+python3 build-angle.py linux -archs x64             # ANGLE Vulkan runtime
+python3 build-angle.py mac -archs arm64             # ANGLE Metal runtime
 
 # Options
 python3 build-skia.py <platform> -config Debug     # Debug build (default: Release)

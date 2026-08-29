@@ -4,8 +4,8 @@ This file describes how AI coding agents can effectively work with this reposito
 
 ## Repository Context
 
-This is a **build automation repository** for cross-platform static libraries. The primary artifacts are:
-- Pre-built libraries (`.a`, `.lib` files)
+This is a **build automation repository** for cross-platform native libraries. The primary artifacts are:
+- Pre-built static and shared libraries (`.a`, `.lib`, `.so`, `.dylib` files)
 - Headers
 - GitHub Actions workflows for CI/CD
 

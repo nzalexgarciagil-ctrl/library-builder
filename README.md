@@ -1,6 +1,6 @@
 # Mystral Engine Library Builder
 
-This repository provides automated builds of static libraries for [Mystral Engine](https://github.com/mystralengine) dependencies.
+This repository provides automated builds of native libraries for [Mystral Engine](https://github.com/mystralengine) dependencies.
 
 **Currently supported:**
 - [Skia](https://skia.org/) - 2D graphics library with Dawn/Graphite support
@@ -9,10 +9,10 @@ This repository provides automated builds of static libraries for [Mystral Engin
 - [libuv](https://libuv.org/) - Async I/O event loop (non-blocking network, file, timers).
 - [Draco](https://github.com/google/draco) - Mesh compression (native glTF Draco decoding).
 - [quiche](https://github.com/cloudflare/quiche) - QUIC + HTTP/3, the native backend for the WebTransport API. Built with the `ffi` feature plus a small patch exposing WebTransport SETTINGS; bundles BoringSSL.
+- [ANGLE](https://chromium.googlesource.com/angle/angle) - EGL and OpenGL ES shared runtimes for WebGL 2. Linux packages use Vulkan with X11 and Wayland; macOS packages use Metal.
 
 **Planned:**
 - V8 - JavaScript engine. Currently using older build from https://github.com/kuoruan/libv8
-- ANGLE - OpenGL ES to other backends - no good cross platform solution yet (individual repos w/ Windows & Linux builds, but no cross platform support).
 
 **Dependencies with existing prebuilt libraries**
 - Dawn - https://github.com/google/dawn/releases - Google / Chrome's WebGPU implementation. Note however that this doesn't have iOS releases, while the Skia build above does have a Dawn iOS release associated.
@@ -61,7 +61,13 @@ python3 build-skia.py win -crt dynamic       # Windows x64 (dynamic CRT)
 python3 build-skia.py linux                  # Linux x64
 python3 build-skia.py wasm                   # WebAssembly
 python3 build-skia.py xcframework            # Apple XCFramework
+
+# Build ANGLE WebGL 2 runtimes (must run on the target operating system)
+python3 build-angle.py linux -archs x64       # Vulkan, X11, and Wayland
+python3 build-angle.py mac -archs arm64        # Metal
 ```
+
+ANGLE packages are written to `build/angle-<platform>-<architecture>`. Linux runtimes use the host's Vulkan loader, Vulkan driver, and XCB runtime; Wayland presentation additionally uses the system Wayland runtime libraries. The ANGLE workflow builds each package and verifies a headless triangle render with pixel readback before publishing it.
 
 ### Options
 
