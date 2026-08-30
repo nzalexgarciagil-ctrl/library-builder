@@ -94,10 +94,17 @@ jobs:
         run: |
           package_dir="build/angle-${{ matrix.platform }}-${{ matrix.arch }}"
           test_binary="build/test-angle-${{ matrix.platform }}-${{ matrix.arch }}"
+          link_options=()
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            link_options+=(
+              "-Wl,-rpath,@executable_path/angle-${{ matrix.platform }}-${{ matrix.arch }}/lib"
+            )
+          fi
           c++ -std=c++17 \
             -I"$package_dir/include" \
             tests/test-angle.cpp \
             -L"$package_dir/lib" \
+            "${link_options[@]}" \
             -lEGL -lGLESv2 \
             -o "$test_binary"
 
@@ -108,8 +115,13 @@ jobs:
               LD_LIBRARY_PATH="$package_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
               "$test_binary"
           else
-            DYLD_LIBRARY_PATH="$package_dir/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
-              "$test_binary"
+            otool -D "$package_dir/lib/libEGL.dylib" | \
+              grep -Fxq '@rpath/libEGL.dylib'
+            otool -D "$package_dir/lib/libGLESv2.dylib" | \
+              grep -Fxq '@rpath/libGLESv2.dylib'
+            codesign --verify --strict "$package_dir/lib/libEGL.dylib"
+            codesign --verify --strict "$package_dir/lib/libGLESv2.dylib"
+            "$test_binary"
           fi
 
       - name: Upload artifact

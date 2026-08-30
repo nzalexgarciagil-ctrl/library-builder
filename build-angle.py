@@ -256,7 +256,13 @@ def copy_runtime(output_dir, package_dir, target_platform):
         if not source.exists():
             print(f"Error: expected ANGLE runtime not found: {source}")
             sys.exit(1)
-        shutil.copy2(source, lib_dir / name)
+        destination = lib_dir / name
+        shutil.copy2(source, destination)
+        if target_platform == "mac":
+            run_command(
+                ["install_name_tool", "-id", f"@rpath/{name}", str(destination)]
+            )
+            run_command(["codesign", "--force", "--sign", "-", str(destination)])
 
 
 def main():

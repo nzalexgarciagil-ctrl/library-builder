@@ -67,7 +67,7 @@ python3 build-angle.py linux -archs x64       # Vulkan, X11, and Wayland
 python3 build-angle.py mac -archs arm64        # Metal
 ```
 
-ANGLE packages are written to `build/angle-<platform>-<architecture>`. Linux runtimes use the host's Vulkan loader, Vulkan driver, and XCB runtime; Wayland presentation additionally uses the system Wayland runtime libraries. The ANGLE workflow builds each package and verifies a headless triangle render with pixel readback before publishing it.
+ANGLE packages are written to `build/angle-<platform>-<architecture>`. Linux runtimes use the host's Vulkan loader, Vulkan driver, and XCB runtime; Wayland presentation additionally uses the system Wayland runtime libraries. macOS libraries use relocatable `@rpath` install names and are ad-hoc signed after packaging. The ANGLE workflow builds each package and verifies a headless triangle render with pixel readback before publishing it.
 
 ### Options
 
