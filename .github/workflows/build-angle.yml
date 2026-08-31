@@ -49,7 +49,7 @@ jobs:
           - os: macos-15
             platform: mac
             arch: arm64
-          - os: macos-15-intel
+          - os: macos-15
             platform: mac
             arch: x64
 
@@ -88,6 +88,10 @@ jobs:
         with:
           platforms: arm64
 
+      - name: Set up Rosetta
+        if: matrix.platform == 'mac' && matrix.arch == 'x64'
+        run: sudo softwareupdate --install-rosetta --agree-to-license
+
       - name: Build ANGLE
         run: |
           python3 build-angle.py ${{ matrix.platform }} \
@@ -124,13 +128,18 @@ jobs:
                   "$test_binary"
               '
           else
+            compile_options=()
             link_options=()
             if [[ "$RUNNER_OS" == "macOS" ]]; then
               link_options+=(
                 "-Wl,-rpath,@executable_path/angle-${{ matrix.platform }}-${{ matrix.arch }}/lib"
               )
+              if [[ "${{ matrix.arch }}" == "x64" ]]; then
+                compile_options+=("-arch" "x86_64")
+              fi
             fi
             c++ -std=c++17 \
+              "${compile_options[@]}" \
               -I"$package_dir/include" \
               tests/test-angle.cpp \
               -L"$package_dir/lib" \
@@ -152,7 +161,11 @@ jobs:
                 grep -Fxq '@rpath/libGLESv2.dylib'
               codesign --verify --strict "$package_dir/lib/libEGL.dylib"
               codesign --verify --strict "$package_dir/lib/libGLESv2.dylib"
-              "$test_binary"
+              if [[ "${{ matrix.arch }}" == "x64" ]]; then
+                arch -x86_64 "$test_binary"
+              else
+                "$test_binary"
+              fi
             fi
           fi
 
