@@ -50,7 +50,7 @@ int main() {
         EGL_NONE,
     };
     EGLDisplay display = getPlatformDisplay(
-        EGL_PLATFORM_ANGLE_ANGLE, EGL_DEFAULT_DISPLAY, displayAttributes);
+        EGL_PLATFORM_ANGLE_ANGLE, nullptr, displayAttributes);
     if (display == EGL_NO_DISPLAY || !eglInitialize(display, nullptr, nullptr)) {
         std::cerr << "ANGLE display initialization failed: 0x" << std::hex
                   << eglGetError() << std::endl;

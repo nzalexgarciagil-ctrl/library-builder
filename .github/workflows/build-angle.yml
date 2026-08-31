@@ -43,7 +43,7 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-24.04
             platform: linux
             arch: arm64
           - os: macos-15
@@ -82,6 +82,12 @@ jobs:
             mesa-vulkan-drivers \
             pkg-config
 
+      - name: Set up arm64 emulation
+        if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Build ANGLE
         run: |
           python3 build-angle.py ${{ matrix.platform }} \
@@ -94,34 +100,60 @@ jobs:
         run: |
           package_dir="build/angle-${{ matrix.platform }}-${{ matrix.arch }}"
           test_binary="build/test-angle-${{ matrix.platform }}-${{ matrix.arch }}"
-          link_options=()
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            link_options+=(
-              "-Wl,-rpath,@executable_path/angle-${{ matrix.platform }}-${{ matrix.arch }}/lib"
-            )
-          fi
-          c++ -std=c++17 \
-            -I"$package_dir/include" \
-            tests/test-angle.cpp \
-            -L"$package_dir/lib" \
-            "${link_options[@]}" \
-            -lEGL -lGLESv2 \
-            -o "$test_binary"
 
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            icd_path=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)
-            test -n "$icd_path"
-            VK_ICD_FILENAMES="$icd_path" \
-              LD_LIBRARY_PATH="$package_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-              "$test_binary"
+          if [[ "$RUNNER_OS" == "Linux" && "${{ matrix.arch }}" == "arm64" ]]; then
+            docker run --rm --platform linux/arm64 \
+              -v "$PWD:/workspace" -w /workspace ubuntu:24.04 bash -c '
+                set -euo pipefail
+                export DEBIAN_FRONTEND=noninteractive
+                apt-get update
+                apt-get install -y g++ libxcb1 mesa-vulkan-drivers
+                package_dir="build/angle-linux-arm64"
+                test_binary="build/test-angle-linux-arm64"
+                c++ -std=c++17 \
+                  -I"$package_dir/include" \
+                  tests/test-angle.cpp \
+                  -L"$package_dir/lib" \
+                  -lEGL -lGLESv2 \
+                  -o "$test_binary"
+                icd_path=$(find /usr/share/vulkan/icd.d \
+                  -name "lvp_icd*.json" -print -quit)
+                test -n "$icd_path"
+                VK_ICD_FILENAMES="$icd_path" \
+                  LD_LIBRARY_PATH="$package_dir/lib" \
+                  "$test_binary"
+              '
           else
-            otool -D "$package_dir/lib/libEGL.dylib" | \
-              grep -Fxq '@rpath/libEGL.dylib'
-            otool -D "$package_dir/lib/libGLESv2.dylib" | \
-              grep -Fxq '@rpath/libGLESv2.dylib'
-            codesign --verify --strict "$package_dir/lib/libEGL.dylib"
-            codesign --verify --strict "$package_dir/lib/libGLESv2.dylib"
-            "$test_binary"
+            link_options=()
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
+              link_options+=(
+                "-Wl,-rpath,@executable_path/angle-${{ matrix.platform }}-${{ matrix.arch }}/lib"
+              )
+            fi
+            c++ -std=c++17 \
+              -I"$package_dir/include" \
+              tests/test-angle.cpp \
+              -L"$package_dir/lib" \
+              "${link_options[@]}" \
+              -lEGL -lGLESv2 \
+              -o "$test_binary"
+
+            if [[ "$RUNNER_OS" == "Linux" ]]; then
+              icd_path=$(find /usr/share/vulkan/icd.d \
+                -name 'lvp_icd*.json' -print -quit)
+              test -n "$icd_path"
+              VK_ICD_FILENAMES="$icd_path" \
+                LD_LIBRARY_PATH="$package_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+                "$test_binary"
+            else
+              otool -D "$package_dir/lib/libEGL.dylib" | \
+                grep -Fxq '@rpath/libEGL.dylib'
+              otool -D "$package_dir/lib/libGLESv2.dylib" | \
+                grep -Fxq '@rpath/libGLESv2.dylib'
+              codesign --verify --strict "$package_dir/lib/libEGL.dylib"
+              codesign --verify --strict "$package_dir/lib/libGLESv2.dylib"
+              "$test_binary"
+            fi
           fi
 
       - name: Upload artifact
